@@ -17,9 +17,48 @@ const app = express();
 const httpServer = createServer(app);
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
+// Allow multiple origins — Vercel preview URLs, custom domain, localhost
+const allowedOrigins = [
+  FRONTEND_URL,
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://ved-assigment.vercel.app",
+  "https://vedassigment.vercel.app",
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (mobile apps, curl, Render health checks)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some((o) => origin.startsWith(o))) {
+      return callback(null, true);
+    }
+    // Also allow any vercel.app subdomain for preview deployments
+    if (origin.endsWith(".vercel.app") || origin.endsWith(".onrender.com")) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS blocked: ${origin}`));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
 // ── Socket.IO ──────────────────────────────────────────────────────────────
 const io = new SocketServer(httpServer, {
-  cors: { origin: FRONTEND_URL, methods: ["GET", "POST"] },
+  cors: {
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.some((o) => origin.startsWith(o)) ||
+        origin.endsWith(".vercel.app") ||
+        origin.endsWith(".onrender.com")
+      ) return callback(null, true);
+      callback(new Error(`Socket CORS blocked: ${origin}`));
+    },
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
   pingTimeout: 60000,
   pingInterval: 25000,
 });
@@ -46,7 +85,8 @@ io.on("connection", (socket) => {
 });
 
 // ── Middleware ─────────────────────────────────────────────────────────────
-app.use(cors({ origin: FRONTEND_URL }));
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // handle preflight for all routes
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
