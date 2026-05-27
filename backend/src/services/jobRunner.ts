@@ -1,5 +1,6 @@
 import { Server as SocketServer } from "socket.io";
 import { generateQuestionPaper } from "./aiService";
+import { IQuestionTypeConfig } from "../models/Assignment";
 import { memStore } from "../store/memoryStore";
 import { getIsConnected } from "../config/database";
 import AssignmentModel from "../models/Assignment";
@@ -28,9 +29,17 @@ export async function runJobInline(jobId: string, assignmentId: string, params: 
     memStore.updateJob(jobId, { progress: 40, message: "Generating questions with AI..." });
     emit("job-progress", { jobId, progress: 40, message: "Generating questions with AI..." });
 
+    // Build typed params — pull each field explicitly to avoid spread conflicts
     const paper = await generateQuestionPaper({
       assignmentId,
-      ...(params as Parameters<typeof generateQuestionPaper>[0]),
+      title:                  String(params.title                  || ""),
+      subject:                String(params.subject                || ""),
+      className:              String(params.className              || ""),
+      schoolName:             String(params.schoolName             || "Delhi Public School"),
+      timeAllowed:            Number(params.timeAllowed            || 45),
+      questionTypes:          (params.questionTypes as IQuestionTypeConfig[]) || [],
+      additionalInstructions: String(params.additionalInstructions || ""),
+      uploadedFileContent:    params.uploadedFileContent as string | undefined,
     });
 
     memStore.updateJob(jobId, { progress: 85, message: "Structuring question paper..." });
@@ -41,13 +50,9 @@ export async function runJobInline(jobId: string, assignmentId: string, params: 
     emit("job-progress", { jobId, progress: 95, message: "Saving to database..." });
     await new Promise((r) => setTimeout(r, 100));
 
-    // ── Persist to MongoDB if connected ──
     if (getIsConnected()) {
       try {
-        await AssignmentModel.findByIdAndUpdate(assignmentId, {
-          status: "completed",
-          generatedPaper: paper,
-        });
+        await AssignmentModel.findByIdAndUpdate(assignmentId, { status: "completed", generatedPaper: paper });
         console.log(`💾 [MongoDB] Saved paper for assignment ${assignmentId}`);
       } catch (dbErr) {
         console.warn("MongoDB save failed, using memory:", dbErr);
@@ -60,11 +65,10 @@ export async function runJobInline(jobId: string, assignmentId: string, params: 
     memStore.updateJob(jobId, { status: "completed", progress: 100, message: "Done!", result: paper });
     emit("job-progress", { jobId, progress: 100, message: "Done!" });
     emit("job-completed", { jobId, result: paper });
-
     console.log(`✅ Job ${jobId} completed`);
+
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Generation failed";
-
     if (getIsConnected()) {
       try { await AssignmentModel.findByIdAndUpdate(assignmentId, { status: "failed" }); } catch { /* ignore */ }
     }
