@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 48, 48, 48;
+  --background-start-rgb: 238, 238, 238;
+  --background-end-rgb: 218, 218, 218;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(180deg, #EEEEEE 0%, #DADADA 100%);
+  min-height: 100vh;
+  font-family: var(--font-bricolage), sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .letter-tight {
+    letter-spacing: -0.04em;
+  }
+  /* Safe area padding for iOS notch/home bar */
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #DADADA; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #A9A9A9; }
